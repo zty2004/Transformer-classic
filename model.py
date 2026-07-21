@@ -22,6 +22,23 @@ class ModelArgs:
 
     device: str = None
 
+def precompute_theta_pos_frequencies(head_dim: int, seq_len: int, device: str, theta: float = 10000.0):
+    assert head_dim % 2 == 0, "Dimension must be even"
+    # Formula from the paper: theta_i = 1 / 10000^(-2(i-1)/dim) for i = [1, 2, ... dim / 2]
+    # Shape: (Head_Dim / 2)
+    theta_numerator = torch.arange(0, head_dim, 2).float()
+    # Shape: (Head_Dim / 2)
+    theta = 1.0 / (theta ** (theta_numerator / head_dim)).to(device)
+    # Construct position "m"
+    # Shape: (Seq_Len)
+    m = torch.arange(seq_len, device = device)
+    # Outer product m and theta
+    # Shape (Seq_Len, Head_Dim / 2)
+    freqs = torch.outer(m, theta).float()
+    # To complex form
+    freqs_complex = torch.polar(torch.ones_like(freqs), freqs)
+    return freqs_complex
+
 class Transformer(nn.Module):
 
     def __init__(self, args: ModelArgs) -> None:
