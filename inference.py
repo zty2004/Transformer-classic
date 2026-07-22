@@ -71,7 +71,7 @@ class LLaMA:
             # Populate the initial tokens with the prompt tokens
             tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device = device)
         
-        eos_reached = torch.Tensor([False] * batch_size, device = device)
+        eos_reached = torch.tensor([False] * batch_size, device = device)
         prompt_tokens_mask = tokens != pad_id # prompt token -> True, otherwise -> False
         for cur_pos in tqdm(range(1, total_len), desc='Generating tokens'):
             with torch.no_grad():
@@ -108,7 +108,7 @@ class LLaMA:
         probs_sum = torch.cumsum(probs_sort, dim = -1)
         mask = probs_sum - probs_sort > p
         probs_sort[mask] = 0.0
-        probs_sort.div_(probs_sort.sum(div = -1, keepdim = True))
+        probs_sort.div_(probs_sort.sum(dim = -1, keepdim = True))
         next_token = torch.multinomial(probs_sort, num_samples = 1)
         next_token = torch.gather(probs_idx, -1, next_token)
         return next_token
