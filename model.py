@@ -47,10 +47,10 @@ def apply_rotary_embeddings(x: torch.Tensor, freqs_complex: torch.Tensor, device
     # (B, Seq_Len, H, Head_Dim / 2) * (1, Seq_Len, 1, Head_Dim / 2) -> (B, Seq_Len, H, Head_Dim / 2)
     x_rotated = x_complex * freqs_complex
     # (B, Seq_Len, H, Head_Dim / 2) -> (B, Seq_Len, H, Head_Dim / 2, 2)
-    x_out = torch.view_As_real(x_rotated)
+    x_out = torch.view_as_real(x_rotated)
     # (B, Seq_Len, H, Head_Dim / 2, 2) -> (B, Seq_Len, H, Head_Dim)
     x_out = x_out.reshape(*x.shape)
-    return x.out.type_as(x).to(device)
+    return x_out.type_as(x).to(device)
 
 def repeat_kv(x: torch.Tensor, n_rep: int):
     batch_size, seq_len, n_kv_heads, head_dim = x.shape
@@ -100,7 +100,7 @@ class EncoderBlock(nn.Module):
     def forward(self, x: torch.Tensor, start_pos: int, freqs_complex: torch.Tensor):
         # (B, Seq_Len, Dim) + (B, Seq_Len, Dim) -> (B, Seq_Len, Dim)
         h = x + self.attention.forward(self.attention_norm(x), start_pos, freqs_complex)
-        out = h + self.feed_forward.forward(self.ffn_nrom(h))
+        out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out 
     
 class SelfAttention(nn.Module):
@@ -117,7 +117,7 @@ class SelfAttention(nn.Module):
         # dimension of each head
         self.head_dim = args.dim // args.n_heads
 
-        self.wq = nn.Linear(args.dim, args.n_heads * self.head_dim, dias = False)
+        self.wq = nn.Linear(args.dim, args.n_heads * self.head_dim, bias = False)
         self.wk = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias = False)
         self.wv = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias = False)
         self.wo = nn.Linear(args.n_heads * self.head_dim, args.dim, bias = False)
@@ -181,7 +181,7 @@ class FeedForward(nn.Module):
         if args.ffn_dim_multiplier is not None:
             hidden_dim = int(args.ffn_dim_multiplier * hidden_dim)
         # ceil to the nearest multiple of args.multiple_of
-        hidden = args.multiple_of * ((hidden_dim + args.multiple_of - 1) // args.multiple_of)
+        hidden_dim = args.multiple_of * ((hidden_dim + args.multiple_of - 1) // args.multiple_of)
 
         self.w1 = nn.Linear(args.dim, hidden_dim, bias = False)
         self.w2 = nn.Linear(hidden_dim, args.dim, bias = False)
@@ -223,6 +223,7 @@ class Transformer(nn.Module):
         # (Batch_size, Seq_Len) -> (Batch_size, Seq_Len, Dim)
         freqs_complex = self.freqs_complex[start_pos:start_pos + seq_len]
 
+        h = self.tok_embeddings(tokens)
         # Apply layer multiple times
         for layer in self.layers:
             h = layer(h, start_pos, freqs_complex)

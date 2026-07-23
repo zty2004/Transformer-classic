@@ -27,7 +27,7 @@ class LLaMA:
             print(f'Loaded checkpoint in {(time.time() - prev_time):.2f}s')
             prev_time = time.time()
 
-        with (open(Path(checkpoints_dir)) / "params.json", "r") as f:
+        with open(Path(checkpoints_dir) / "params.json", "r") as f:
             params = json.loads(f.read())
         model_args: ModelArgs = ModelArgs(
             max_seq_len = max_seq_len,
@@ -57,6 +57,7 @@ class LLaMA:
     def text_completion(self, prompts: list[str], temperature: float = 0.6, top_p: float = 0.9, max_gen_len: Optional[int] = None):
         if max_gen_len is None:
             max_gen_len = self.args.max_seq_len - 1
+        device = self.args.device
         prompt_tokens = [self.tokenizer.encode(prompt, out_type=int, add_bos=True, add_eos=False) for prompt in prompts]
         batch_size = len(prompt_tokens)
         assert batch_size <= self.args.max_batch_size
@@ -66,7 +67,7 @@ class LLaMA:
 
         # Create the list that will contain the generated tokens, along with the initial prompt tokens
         pad_id = self.tokenizer.pad_id()
-        tokens = torch.full((batch_size, total_len), pad_id, dtype=torch.long, decice = device)
+        tokens = torch.full((batch_size, total_len), pad_id, dtype=torch.long, device=device)
         for k, t in enumerate(prompt_tokens):
             # Populate the initial tokens with the prompt tokens
             tokens[k, :len(t)] = torch.tensor(t, dtype=torch.long, device = device)
@@ -82,7 +83,7 @@ class LLaMA:
                 next_token = self._sample_top_p(probs, top_p)
             else:
                 # Greedy
-                next_token = torch.softmax(logits[:, -1], dim = -1)
+                next_token = torch.argmax(logits[:, -1], dim = -1)
             
             next_token = next_token.reshape(-1)
             next_token = torch.where(prompt_tokens_mask[:, cur_pos], tokens[:, cur_pos], next_token)
@@ -104,7 +105,7 @@ class LLaMA:
         return (out_tokens, out_text)
 
     def _sample_top_p(self, probs, p):
-        probs_sort, probs_idx = torch.sort(probs, dim = -1, descendings = True)
+        probs_sort, probs_idx = torch.sort(probs, dim = -1, descending = True)
         probs_sum = torch.cumsum(probs_sort, dim = -1)
         mask = probs_sum - probs_sort > p
         probs_sort[mask] = 0.0
@@ -125,8 +126,8 @@ if __name__ == '__main__':
     ]
 
     model = LLaMA.build(
-        chekpoints_dir = 'llama-2-7b/',
-        tokenizer_path = 'tokenizer.model',
+        checkpoints_dir = 'llama-2-7b/',
+        tokenizer_path = 'llama-2-7b/tokenizer.model',
         load_model = True,
         max_seq_len = 1024,
         max_batch_size = 3,
